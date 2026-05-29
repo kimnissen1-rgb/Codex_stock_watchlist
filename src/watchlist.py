@@ -13,8 +13,6 @@ import yfinance as yf
 
 COPENHAGEN = pytz.timezone("Europe/Copenhagen")
 REQUIRED_EMAIL_SECRETS = [
-    "SMTP_HOST",
-    "SMTP_PORT",
     "SMTP_USER",
     "SMTP_PASSWORD",
     "EMAIL_TO",
@@ -168,8 +166,8 @@ def load_email_config() -> dict[str, str]:
         )
 
     config = {
-        "SMTP_HOST": clean_secret_value("SMTP_HOST", os.environ["SMTP_HOST"]),
-        "SMTP_PORT": clean_secret_value("SMTP_PORT", os.environ["SMTP_PORT"]),
+        "SMTP_HOST": clean_secret_value("SMTP_HOST", os.environ.get("SMTP_HOST", "smtp.gmail.com")),
+        "SMTP_PORT": clean_secret_value("SMTP_PORT", os.environ.get("SMTP_PORT", "587")),
         "SMTP_USER": clean_secret_value("SMTP_USER", os.environ["SMTP_USER"]),
         "SMTP_PASSWORD": clean_secret_value("SMTP_PASSWORD", os.environ["SMTP_PASSWORD"]).replace(" ", ""),
         "EMAIL_FROM": clean_secret_value("EMAIL_FROM", os.environ.get("EMAIL_FROM", os.environ["SMTP_USER"])),
