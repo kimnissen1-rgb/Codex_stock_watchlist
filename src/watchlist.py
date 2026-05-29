@@ -12,6 +12,13 @@ import pytz
 import yfinance as yf
 
 COPENHAGEN = pytz.timezone("Europe/Copenhagen")
+REQUIRED_EMAIL_SECRETS = [
+    "SMTP_HOST",
+    "SMTP_PORT",
+    "SMTP_USER",
+    "SMTP_PASSWORD",
+    "EMAIL_TO",
+]
 
 
 @dataclass
@@ -142,13 +149,43 @@ def build_email(candidates: list[Candidate]) -> tuple[str, str]:
     return subject, "\n".join(lines)
 
 
+def clean_secret_value(name: str, value: str) -> str:
+    value = value.strip()
+    if "=" in value:
+        key, rest = value.split("=", 1)
+        if key.strip().upper() == name:
+            value = rest.strip()
+    return value
+
+
+def load_email_config() -> dict[str, str]:
+    missing = [name for name in REQUIRED_EMAIL_SECRETS if not os.environ.get(name, "").strip()]
+    if missing:
+        raise RuntimeError(
+            "Missing required GitHub Actions secrets: "
+            + ", ".join(missing)
+            + ". Create them one by one under Settings -> Secrets and variables -> Actions."
+        )
+
+    config = {
+        "SMTP_HOST": clean_secret_value("SMTP_HOST", os.environ["SMTP_HOST"]),
+        "SMTP_PORT": clean_secret_value("SMTP_PORT", os.environ["SMTP_PORT"]),
+        "SMTP_USER": clean_secret_value("SMTP_USER", os.environ["SMTP_USER"]),
+        "SMTP_PASSWORD": clean_secret_value("SMTP_PASSWORD", os.environ["SMTP_PASSWORD"]).replace(" ", ""),
+        "EMAIL_FROM": clean_secret_value("EMAIL_FROM", os.environ.get("EMAIL_FROM", os.environ["SMTP_USER"])),
+        "EMAIL_TO": clean_secret_value("EMAIL_TO", os.environ["EMAIL_TO"]),
+    }
+    return config
+
+
 def send_email(subject: str, body: str) -> None:
-    host = os.environ["SMTP_HOST"]
-    port = int(os.environ.get("SMTP_PORT", "587"))
-    user = os.environ["SMTP_USER"]
-    password = os.environ["SMTP_PASSWORD"]
-    sender = os.environ.get("EMAIL_FROM", user)
-    recipient = os.environ["EMAIL_TO"]
+    config = load_email_config()
+    host = config["SMTP_HOST"]
+    port = int(config["SMTP_PORT"])
+    user = config["SMTP_USER"]
+    password = config["SMTP_PASSWORD"]
+    sender = config["EMAIL_FROM"]
+    recipient = config["EMAIL_TO"]
 
     msg = MIMEText(body, "plain", "utf-8")
     msg["Subject"] = subject
