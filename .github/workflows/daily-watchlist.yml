@@ -22,6 +22,23 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Check email secrets
+        env:
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+        run: |
+          missing=0
+          for name in SMTP_USER SMTP_PASSWORD EMAIL_TO; do
+            if [ -z "${!name}" ]; then
+              echo "::error title=Missing GitHub Actions secret::$name is missing. Open Settings -> Secrets and variables -> Actions -> Repository secrets, then create this exact name."
+              missing=1
+            else
+              echo "$name is configured."
+            fi
+          done
+          exit "$missing"
+
       - name: Send Danish stock watchlist
         env:
           SMTP_HOST: smtp.gmail.com
