@@ -1,0 +1,33 @@
+name: Daily stock watchlist
+
+on:
+  schedule:
+    # GitHub Actions uses UTC. Run twice and let Python handle Copenhagen DST.
+    - cron: '15 12 * * 1-5'
+    - cron: '15 13 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  send-watchlist:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Send Danish stock watchlist
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+        run: python src/watchlist.py
