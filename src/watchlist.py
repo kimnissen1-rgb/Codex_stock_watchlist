@@ -36,6 +36,7 @@ class Candidate:
     entry: str
     stop: str
     target: str
+    company_name: str = ""
 
 
 def williams_r(df: pd.DataFrame, period: int = 14) -> pd.Series:
@@ -121,6 +122,25 @@ def analyze_ticker(ticker: str) -> Candidate | None:
     return Candidate(ticker, close, change_5d, change_20d, wr, vol_ratio, trend_score, score, setup, risk, entry, stop, target)
 
 
+def get_company_name(ticker: str) -> str:
+    try:
+        info = yf.Ticker(ticker).get_info()
+    except Exception as exc:
+        print(f"Could not fetch company name for {ticker}: {exc}")
+        return ""
+
+    for key in ("longName", "shortName"):
+        value = info.get(key)
+        if isinstance(value, str) and value.strip() and value.strip().upper() != ticker:
+            return value.strip()
+    return ""
+
+
+def enrich_company_names(candidates: list[Candidate]) -> None:
+    for candidate in candidates:
+        candidate.company_name = get_company_name(candidate.ticker)
+
+
 def build_email(candidates: list[Candidate]) -> tuple[str, str]:
     now = datetime.now(COPENHAGEN)
     subject = f"Daglig aktie-watchlist - {now:%d-%m-%Y}"
@@ -132,7 +152,8 @@ def build_email(candidates: list[Candidate]) -> tuple[str, str]:
     lines.append("Metode: listen er rangeret efter trend, Williams %R, 5/20-dages momentum og volumen-ratio. ETF'er indgår ikke, medmindre du selv tilføjer dem i tickers.txt.\n")
 
     for i, c in enumerate(candidates, 1):
-        lines.append(f"{i}. {c.ticker}")
+        ticker_heading = f"{c.ticker} - {c.company_name}" if c.company_name else c.ticker
+        lines.append(f"{i}. {ticker_heading}")
         lines.append(f"Kurs: {c.close:.2f} | 5d: {c.change_5d:+.1f}% | 20d: {c.change_20d:+.1f}% | Williams %R: {c.williams_r:.1f} | Volumen-ratio: {c.volume_ratio:.2f}x")
         lines.append(f"Setup: {c.setup}")
         lines.append(f"Risiko: {c.risk}")
@@ -252,6 +273,8 @@ def main() -> None:
     candidates = sorted(candidates, key=lambda x: x.score, reverse=True)[:10]
     if not candidates:
         raise RuntimeError("No candidates generated")
+
+    enrich_company_names(candidates)
 
     subject, body = build_email(candidates)
     if args.dry_run:
