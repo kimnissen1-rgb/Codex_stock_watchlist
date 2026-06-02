@@ -17,6 +17,8 @@ REQUIRED_EMAIL_SECRETS = [
     "SMTP_PASSWORD",
     "EMAIL_TO",
 ]
+SUMMER_SCHEDULE = "37 12 * * 1-5"
+WINTER_SCHEDULE = "37 13 * * 1-5"
 
 
 @dataclass
@@ -170,7 +172,7 @@ def load_email_config() -> dict[str, str]:
         "SMTP_PORT": clean_secret_value("SMTP_PORT", os.environ.get("SMTP_PORT", "587")),
         "SMTP_USER": clean_secret_value("SMTP_USER", os.environ["SMTP_USER"]),
         "SMTP_PASSWORD": clean_secret_value("SMTP_PASSWORD", os.environ["SMTP_PASSWORD"]).replace(" ", ""),
-        "EMAIL_FROM": clean_secret_value("EMAIL_FROM", os.environ.get("EMAIL_FROM", os.environ["SMTP_USER"])),
+        "EMAIL_FROM": clean_secret_value("EMAIL_FROM", os.environ.get("EMAIL_FROM", "") or os.environ["SMTP_USER"]),
         "EMAIL_TO": clean_secret_value("EMAIL_TO", os.environ["EMAIL_TO"]),
     }
     return config
@@ -196,13 +198,35 @@ def send_email(subject: str, body: str) -> None:
         server.send_message(msg)
 
 
+def expected_schedule_for_copenhagen_time(now: datetime) -> str | None:
+    offset = now.utcoffset()
+    if offset is None:
+        return None
+    offset_hours = int(offset.total_seconds() // 3600)
+    if offset_hours == 2:
+        return SUMMER_SCHEDULE
+    if offset_hours == 1:
+        return WINTER_SCHEDULE
+    return None
+
+
+def in_copenhagen_send_window(now: datetime) -> bool:
+    return now.hour == 14 or (now.hour == 15 and now.minute <= 20)
+
+
 def should_run_now(force: bool = False) -> bool:
     if force:
         return True
     now = datetime.now(COPENHAGEN)
     if now.weekday() >= 5:
         return False
-    # Accept a window so GitHub Actions delay does not break the job.
+
+    triggered_schedule = os.environ.get("GITHUB_EVENT_SCHEDULE", "").strip()
+    if triggered_schedule:
+        expected_schedule = expected_schedule_for_copenhagen_time(now)
+        return triggered_schedule == expected_schedule and in_copenhagen_send_window(now)
+
+    # Local fallback when the script is not running from a scheduled GitHub event.
     return now.hour == 14 and 0 <= now.minute <= 45
 
 
