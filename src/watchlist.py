@@ -17,8 +17,7 @@ REQUIRED_EMAIL_SECRETS = [
     "SMTP_PASSWORD",
     "EMAIL_TO",
 ]
-SUMMER_SCHEDULE = "37 12 * * 1-5"
-WINTER_SCHEDULE = "37 13 * * 1-5"
+SENT_DATE_FILE = Path(".watchlist-state/last_sent_date.txt")
 
 
 @dataclass
@@ -219,20 +218,23 @@ def send_email(subject: str, body: str) -> None:
         server.send_message(msg)
 
 
-def expected_schedule_for_copenhagen_time(now: datetime) -> str | None:
-    offset = now.utcoffset()
-    if offset is None:
-        return None
-    offset_hours = int(offset.total_seconds() // 3600)
-    if offset_hours == 2:
-        return SUMMER_SCHEDULE
-    if offset_hours == 1:
-        return WINTER_SCHEDULE
-    return None
+def today_key(now: datetime) -> str:
+    return now.strftime("%Y-%m-%d")
 
 
 def in_copenhagen_send_window(now: datetime) -> bool:
     return now.hour == 14 or (now.hour == 15 and now.minute <= 20)
+
+
+def already_sent_today(now: datetime) -> bool:
+    if not SENT_DATE_FILE.exists():
+        return False
+    return SENT_DATE_FILE.read_text(encoding="utf-8").strip() == today_key(now)
+
+
+def record_sent_today(now: datetime) -> None:
+    SENT_DATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    SENT_DATE_FILE.write_text(today_key(now) + "\n", encoding="utf-8")
 
 
 def should_run_now(force: bool = False) -> bool:
@@ -241,14 +243,7 @@ def should_run_now(force: bool = False) -> bool:
     now = datetime.now(COPENHAGEN)
     if now.weekday() >= 5:
         return False
-
-    triggered_schedule = os.environ.get("GITHUB_EVENT_SCHEDULE", "").strip()
-    if triggered_schedule:
-        expected_schedule = expected_schedule_for_copenhagen_time(now)
-        return triggered_schedule == expected_schedule and in_copenhagen_send_window(now)
-
-    # Local fallback when the script is not running from a scheduled GitHub event.
-    return now.hour == 14 and 0 <= now.minute <= 45
+    return in_copenhagen_send_window(now)
 
 
 def main() -> None:
@@ -257,8 +252,15 @@ def main() -> None:
     parser.add_argument("--force", action="store_true", help="Run even outside the Copenhagen time window")
     args = parser.parse_args()
 
+    now = datetime.now(COPENHAGEN)
+    print(f"Copenhagen time: {now:%Y-%m-%d %H:%M:%S %Z}")
+
     if not should_run_now(force=args.force or args.dry_run):
         print("Outside Copenhagen run window; exiting without sending.")
+        return
+
+    if not args.force and not args.dry_run and already_sent_today(now):
+        print(f"Watchlist already sent for {today_key(now)}; exiting without sending a duplicate.")
         return
 
     candidates = []
@@ -283,6 +285,7 @@ def main() -> None:
         print(body)
     else:
         send_email(subject, body)
+        record_sent_today(now)
         print(f"Sent: {subject}")
 
 
