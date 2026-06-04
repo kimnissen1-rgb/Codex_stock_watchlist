@@ -4,7 +4,7 @@ on:
   schedule:
     # Multiple attempts make the mail resilient to delayed or dropped scheduled runs.
     # The Python script only sends once per Copenhagen date and only before market open.
-    - cron: '37 4-15 * * 1-5'
+    - cron: '7,37 0-15 * * 1-5'
       timezone: "Europe/Copenhagen"
   workflow_dispatch:
 

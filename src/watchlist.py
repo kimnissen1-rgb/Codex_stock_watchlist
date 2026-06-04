@@ -223,7 +223,7 @@ def today_key(now: datetime) -> str:
 
 
 def in_copenhagen_send_window(now: datetime) -> bool:
-    return now.hour == 14 or (now.hour == 15 and now.minute <= 20)
+    return now.hour < 15 or (now.hour == 15 and now.minute <= 20)
 
 
 def already_sent_today(now: datetime) -> bool:
@@ -256,7 +256,7 @@ def main() -> None:
     print(f"Copenhagen time: {now:%Y-%m-%d %H:%M:%S %Z}")
 
     if not should_run_now(force=args.force or args.dry_run):
-        print("Outside Copenhagen run window; exiting without sending.")
+        print("After Copenhagen pre-market send window; exiting without sending.")
         return
 
     if not args.force and not args.dry_run and already_sent_today(now):
